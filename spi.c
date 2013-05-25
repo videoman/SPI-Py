@@ -31,7 +31,7 @@
 static void pabort(const char *s)
 {
 	perror(s);
-	abort();
+//	abort();
 }
 
 static const char *device = "/dev/spidev0.0";
@@ -144,12 +144,13 @@ static PyObject* transfer(PyObject* self, PyObject* arg)
 
 
 	uint32_t tupleSize = PyTuple_Size(transferTuple);
+	// printf("size is %d\n", tupleSize);
 
 	uint8_t tx[tupleSize];
 	uint8_t rx[tupleSize];
 	PyObject* tempItem;
 
-	uint8_t i=0;
+	uint32_t i=0;
 
 	while(i < tupleSize)
 	{
@@ -185,6 +186,70 @@ static PyObject* transfer(PyObject* self, PyObject* arg)
 	return transferTuple;
 }
 
+void addbit(uint8_t *buf, int bitpos, int bit)
+{
+	int p = bitpos / 8;
+	int sub = 7 - (bitpos % 8);
+	if (bit)
+		buf[p] |= (1<<sub);
+	else
+		buf[p] &= ~(1<<sub);
+}
+
+static PyObject* transferrgb(PyObject* self, PyObject* arg)
+{
+	PyObject *red, *green, *blue;
+
+	if(!PyArg_ParseTuple(arg, "OOO", &red, &green, &blue))
+		return NULL;
+
+	uint32_t len = PyList_Size(red);
+	int full = (len * 25 + 7) / 8 + 5;
+	// printf("size is %d\n", tupleSize);
+
+	uint8_t tx[full];
+	uint8_t rx[full];
+	PyObject* tempItem;
+	int i = 0, bitpos = 5 * 8, v, b;
+
+	tx[0] = tx[1] = tx[2] = tx[3] = tx[4] = 0;
+
+	while(i < len)
+	{
+		addbit(tx, bitpos++, 1);  // start bit
+
+		tempItem = PyList_GetItem(red, i);
+		v = (uint8_t)PyInt_AsSsize_t(tempItem);
+		for (b = 7; b >= 0; b--)
+			addbit(tx, bitpos++, (v >> b) & 1);
+
+		tempItem = PyList_GetItem(green, i);
+		v = (uint8_t)PyInt_AsSsize_t(tempItem);
+		for (b = 7; b >= 0; b--)
+			addbit(tx, bitpos++, (v >> b) & 1);
+
+		tempItem = PyList_GetItem(blue, i);
+		v = (uint8_t)PyInt_AsSsize_t(tempItem);
+		for (b = 7; b >= 0; b--)
+			addbit(tx, bitpos++, (v >> b) & 1);
+
+		i++;
+	}
+
+	struct spi_ioc_transfer tr = {
+		.tx_buf = (unsigned long)tx,
+		.rx_buf = (unsigned long)rx,
+		.len = full,
+		.delay_usecs = delay,
+		.speed_hz = speed,
+		.bits_per_word = bits,
+                .cs_change = 1,
+	};
+
+	ret = ioctl(fd, SPI_IOC_MESSAGE(1), &tr);
+	Py_RETURN_FALSE;
+}
+
 
 static PyObject* closeSPI(PyObject* self,PyObject* args)
 {
@@ -196,6 +261,7 @@ static PyMethodDef SpiMethods[] =
 {
 	{"openSPI", openSPI, METH_KEYWORDS, "Open SPI Port."},
 	{"transfer", transfer, METH_VARARGS, "Transfer data."},
+	{"transferrgb", transferrgb, METH_VARARGS, "Transfer data."},
 	{"closeSPI", closeSPI, METH_NOARGS, "Close SPI port."},
 	{NULL, NULL, 0, NULL}
 };
