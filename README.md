@@ -1,3 +1,8 @@
+Added code for SM16716 Addressable LEDs.  They use 25-bit words- one 1 bit is the start bit, and then 3 8-bit words to control the RGB for each LED. 
+
+Please check out the Strange Attractors python code in my repo to control this arry of 400 addressable LEDs
+
+--- from SPI-Py module ---
 SPI-Py: Hardware SPI as a C Extension for Python
 ======
 
